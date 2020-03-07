@@ -1,6 +1,5 @@
 import os
 import threading
-import fnmatch
 import logging
 import logging.config
 formatter = logging.Formatter(fmt='%(asctime)s  %(levelname)-8s [%(threadName)s-%(name)s] %(message)s',
@@ -43,9 +42,9 @@ def start_thread_logging(file_path):
 
         log_handler.setLevel(logging.DEBUG)
 
-        formatter = logging.Formatter(fmt='%(asctime)s  %(levelname)-8s [%(threadName)s-%(name)s] %(message)s',
-                                      datefmt="%Y-%m-%d %H:%M:%S")
-        log_handler.setFormatter(formatter)
+        my_formatter = logging.Formatter(fmt='%(asctime)s  %(levelname)-8s [%(threadName)s-%(name)s] %(message)s',
+                                         datefmt="%Y-%m-%d %H:%M:%S")
+        log_handler.setFormatter(my_formatter)
 
         log_filter = ThreadLogFilter(thread_name)
         log_handler.addFilter(log_filter)
