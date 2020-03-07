@@ -22,14 +22,15 @@ file_path = ""
 
 # Checks if the settings are valid
 def check_settings(file_path_in, local_in, ip_in, username_in, key_in, file_in, level_in, token_in, bookws_in,
-                   booksort_in, moviews_in, moviesort_in, force=False):
+                   booksort_in, moviews_in, moviesort_in, gamesws_in, gamesort_in, force=False):
     while True:
         if not force:
             if (local_in or (ip_in and username_in and key_in)) and file_in and level_in:
                 if (bookws_in and booksort_in) or (not booksort_in and not bookws_in):
-                    if(moviews_in and moviesort_in) or (not moviesort_in and not moviews_in):
-                        return [file_path, local_in, ip_in, username_in, key_in, file_in, level_in,
-                                token_in, bookws_in, booksort_in, moviews_in, moviesort_in]
+                    if(gamesws_in and gamesort_in) or (not gamesort_in and not gamesws_in):
+                        if(moviews_in and moviesort_in) or (not moviesort_in and not moviews_in):
+                            return [file_path, local_in, ip_in, username_in, key_in, file_in, level_in, token_in, 
+                                    bookws_in, booksort_in, moviews_in, moviesort_in, gamesws_in, gamesort_in]
         print("Lets go through the settings")
         print("Where would you like the spreadsheet, logs, and information files stored")
         file_path_in = input("Enter the path to save files (C:\\Users\\Demo\\Desktop) [" + str(file_path_in) + "]: "
@@ -83,6 +84,18 @@ def check_settings(file_path_in, local_in, ip_in, username_in, key_in, file_in, 
             else:
                 moviesort_in = (input("Enter the sort order in a comma separated list in reverse order "
                                       "[Title]: ") or "Title")
+        gamesws_in = (input("If you will be storing games, enter the name of the Game Worksheet or leave blank [" +
+                            str(gamesws_in) + "]: ") or gamesws_in)
+        if gamesws_in:
+            print("Since we will be storing games, enter how you would like to sort games in reverse sort order "
+                  "(start with the least significant column)")
+            print("Possible columns are: Title, Platform, UPC, Borrowed By, Date Borrowed")
+            if gamesort_in:
+                gamesort_in = (input("Enter the sort order in a comma separated list in reverse order [" +
+                                     ','.join(map(str, gamesort_in)) + "]: ") or ','.join(map(str, gamesort_in)))
+            else:
+                gamesort_in = (input("Enter the sort order in a comma separated list in reverse order "
+                                     "[Title,Format]: ") or "Title,Format")
         print("If you would like to upload the file to dropbox you will need to provide an access token, this is"
               " optional")
         token_in = (input("Enter the dropbox token [" + str(token_in) + "]: ") or token_in)
@@ -103,6 +116,10 @@ def check_settings(file_path_in, local_in, ip_in, username_in, key_in, file_in, 
             logging.info("Writing movieWS = %s movieSort = %s to db.conf", moviews_in, ','.join(map(str, moviesort_in)))
             settings_in.write("movieWS = " + moviews_in + '\n')
             settings_in.write("movieSort = " + moviesort_in + '\n')
+        if gamesws_in and gamesort_in:
+            logging.info("Writing gameWS = %s gameSort = %s to db.conf", gamesws_in, ','.join(map(str, gamesort_in)))
+            settings_in.write("gameWS = " + gamesws_in + '\n')
+            settings_in.write("gameSort = " + gamesort_in + '\n')
         if ip_in:
             logging.info("Writing ip = %s to db.conf", ip_in)
             settings_in.write("ip = " + ip_in + '\n')
@@ -189,7 +206,7 @@ def manage_thread(upc_queue, mt_wb, ssh_client):
 # Always assume we will be connecting to a server
 local = False
 settings = settings2 = token = ip = username = key = file = level = bookWS = bookSort = movieWS = movieSort \
-    = None
+    = gameWS = gameSort = None
 try:
     # Look for configuration File
     file_path = ""
@@ -282,11 +299,24 @@ try:
         logging.info("Sorting books by: %s", movieSort)
         movieSort = [x.strip() for x in movieSort.split(',')]
         logging.debug("after splitting into an array: %s", movieSort)
+    gameWS = next((s for s in temp if 'gameWS' in s), None)
+    if gameWS:
+        gameWS = gameWS.split('=')[1].strip()
+        print("Game Worksheet loaded:", gameWS)
+        logging.info("Found Game Worksheet: %s", gameWS)
+    gameSort = next((s for s in temp if 'gameSort' in s), None)
+    if gameSort:
+        gameSort = gameSort.split('=')[1].strip()
+        print("Sorting games by:", gameSort)
+        logging.info("Sorting games by: %s", gameSort)
+        gameSort = [x.strip() for x in gameSort.split(',')]
+        logging.debug("after splitting into an array: %s", gameSort)
     settings.close()
     if settings2:
         settings2.close()
     file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort = \
-        check_settings(file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort)
+        check_settings(file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort, 
+                       gameWS, gameSort)
     my_logger.config_root_logger(file_path, level)
 
 except OSError as inst:
@@ -297,12 +327,14 @@ except OSError as inst:
     logging.warning("Error reading information from file, error was %s", inst)
     print("Error reading information from file, error was "+inst.strerror)
     file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort = \
-        check_settings(file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort)
+        check_settings(file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort, 
+                       gameWS, gameSort)
     my_logger.config_root_logger(file_path, level)
 
 if input("Settings appear to be valid, would you like to make any changes to them? yes/no [no]: ").lower() == "yes":
     file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort = check_settings(
-        file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort, True)
+        file_path, local, ip, username, key, file, level, token, bookWS, bookSort, movieWS, movieSort, gameWS, 
+        gameSort, True)
     my_logger.config_root_logger(file_path, level)
 
 my_logger.clean_up_logs(file_path)
@@ -346,11 +378,11 @@ ws = None
 print("Opened", file_path + file)
 logging.info("Opened %s", file_path + file)
 count = 0
-for i, sheet in enumerate([bookWS, movieWS]):
+for i, sheet in enumerate([bookWS, movieWS, gameWS]):
     count += 1
 if count > 0:
     print("Database contains the following worksheets, enter the number of the worksheet to use")
-    for i, sheet in enumerate([bookWS, movieWS], start=1):
+    for i, sheet in enumerate([bookWS, movieWS, gameWS], start=1):
         print(str(i) + ") " + sheet)
     temp = input("Which Database? 1 - " + str(count)+": ")
     if temp == '1':
@@ -361,6 +393,9 @@ if count > 0:
         logging.info("Opening Worksheet %s and sorting by %s", movieWS, movieSort)
         ws = wb.open_worksheet(movieWS, movieSort, movie=True)
         sort = movieSort
+    elif temp == '3':
+        logging.info("Opening Worksheet %s and sorting by %s", gameWS, gameSort)
+        ws = wb.open_worksheet(gameWS, gameSort, game=True)
 if not ws:
     logging.critical("No valid worksheet, exiting")
     print("No valid worksheet, exiting")

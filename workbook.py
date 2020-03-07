@@ -38,11 +38,13 @@ class MyWorkbook:
         self.ws = None
         self.pyxlwb = self.open_workbook()
 
-    def open_worksheet(self, name, sort_fields, book=False, movie=False):
+    def open_worksheet(self, name, sort_fields, book=False, movie=False, game=False):
         if book:
             self.ws = MyBookWorksheet(self, name, sort_fields)
         elif movie:
             self.ws = MyMovieWorksheet(self, name, sort_fields)
+        elif game:
+            self.ws = MyGameWorksheet(self, name, sort_fields)
         return self.ws
 
     # Uploads the spreadsheet to dropbox
@@ -385,6 +387,76 @@ class MyMovieWorksheet(MyWorksheet):
                                     " had missing data\n")
                         else:
                             blanks.write(line[3] + " which was scanned after " + result[i - 1][3] + ", named " +
+                                         result[i - 1][0] + " had missing data\n")
+            finally:
+                if blanks:
+                    blanks.close()
+                    return True
+        else:
+            self.logger.info("No blanks found in this set of results")
+            return False
+
+
+class MyGameWorksheet(MyWorksheet):
+    """Worksheet devoted to tracking games"""
+
+    def __init__(self, wb, name, sort_fields):
+        super().__init__(wb, name, sort_fields)
+        try:
+            self.pyxlws = self.wb.pyxlwb[name]
+        except Exception as inst:
+            print("Unable to open worksheet", name, "error:", inst, "making new worksheet")
+            self.logger.warning("Can't open worksheet %s error: %s, making new worksheet", name, inst)
+            if self.wb.pyxlwb.active.title == "Sheet":
+                self.logger.debug("using existing sheet")
+                self.pyxlws = self.wb.pyxlwb.active
+                self.pyxlws.title = self.name
+            else:
+                self.logger.debug("Creating fresh sheet")
+                self.pyxlws = self.wb.pyxlwb.create_sheet(self.name)
+            # Add header row
+            row = ("Title", "Platform", "UPC", "Borrowed By", "Date Borrowed")
+            self.pyxlws.append(row)
+            self.wb.save()
+
+    def add_entry(self, client, barcode):
+        # TODO figure out a set for adding games
+        thread_log_handler = super().add_entry(client, barcode)
+        if not self.check_duplicate(barcode):
+            metadata = upc.get_metadata(barcode)
+            logging.debug("Got metadata, adding to DB")
+            my_logger.stop_thread_logging(thread_log_handler)
+            return self.add_to_db(metadata)
+        else:
+            logging.info("%s is already in spreadsheet", barcode)
+            my_logger.stop_thread_logging(thread_log_handler)
+            return ["duplicate", "duplicate", "duplicate", "duplicate"]
+
+    def incomplete(self, result, previous):
+        blank = False
+        blanks = None
+        for line in result:
+            # If any blank lines then open the blanks file
+            if line[0] is None or line[1] is None:
+                blank = True
+        if blank:
+            try:
+                # Open missing.txt in append mode, create it if it doesn't exist
+                blanks = open(self.wb.file_path + "missing.txt", "a+")
+                for i, line in enumerate(result):
+                    if line[0] is None or line[1] is None:
+                        # Depending on information, write the file with the relevant info
+                        self.logger.warning("Adding note about missing information on %s", line[2])
+                        self.logger.debug("Full information is %s", line)
+                        if i == 0:
+                            if previous is None:
+                                blanks.write("First item scanned, " + line[2] + " had missing data\n")
+                            else:
+                                blanks.write(
+                                    line[2] + " which was scanned after " + previous[2] + ", named " + previous[0] +
+                                    " had missing data\n")
+                        else:
+                            blanks.write(line[2] + " which was scanned after " + result[i - 1][2] + ", named " +
                                          result[i - 1][0] + " had missing data\n")
             finally:
                 if blanks:
